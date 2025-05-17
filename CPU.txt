@@ -1,0 +1,54 @@
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+	And(a=instruction[15] , b=true , out=inst ); 
+    Mux16(a=instruction , b=outalu , sel=instruction[15] , out=outm );
+    //when A instruction-->outm will always be stored in A register
+    Not(in=instruction[15] , out=i15 );
+    And(a=inst , b=instruction[5] , out=car );//control bit of a reg of taking the alu output as input
+    Or(a=i15 , b=car , out=loada );
+    Register(in=outm , load=loada , out=outar ,out[0..14]=addressM);
+    
+    And(a=inst , b=instruction[12] , out=i12 );
+    Mux16(a=outar , b=inM , sel=i12 , out=outam );//out a or m
+    
+    And(a=inst , b=instruction[4] , out=cdr );//control bit of d reg of taking the alu output as input
+    DRegister(in=outalu , load=cdr , out=outdre );//dreg
+    
+    And(a=inst , b=instruction[11] , out=zxi );
+    And(a=inst , b=instruction[10] , out=nxi );
+    And(a=inst , b=instruction[9] , out=zyi );
+    And(a=inst , b=instruction[8] , out=nyi );
+    And(a=inst , b=instruction[7] , out=fi );
+    And(a=inst , b=instruction[6] , out=noi );
+    ALU(x=outdre , y=outam , zx=zxi , nx=nxi , zy=zyi , ny=nyi , f=fi , no=noi , out=outalu , zr=zro , ng=ngo,out=outM );
+    //Write
+    And(a=inst , b=instruction[3] , out=writeM );
+
+    //PC
+    Not(in=ngo , out=notng );
+    Not(in=zro , out=notzr );
+    And(a=notng , b=notzr , out=pos );//pos
+    
+    And(a=instruction[0] , b=pos , out=checkpos );
+    And(a=instruction[1] , b=zro , out=checkzero );
+    And(a=instruction[2] , b=ngo , out=checkng );
+    
+    Or(a=checkpos , b=checkzero , out=posorzero );
+    Or(a=checkng , b=posorzero , out=loadi );//if any bit of j1 j2 j3 become 1 jump
+   
+    And(a=inst , b=loadi , out=load );
+    Not(in=load , out=incin );//when load==0 pc++
+    PC(in=outar , load=load , inc=incin , reset=reset , out=pcout , out[0..14]=pc );
+}
